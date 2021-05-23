@@ -38,10 +38,29 @@ typedef struct block
     uint64_t index;
     uint64_t stake_ind;
     char last_hash[64];
-    transaction_node *chain;
+    transaction_node *tr_chain;
     time_t timestamp;
 }
 block;
+
+/* chain of blocks, aka the actual block chain in a blockchain */
+typedef struct block_node
+{
+    block data;
+    struct block_node* next;
+}
+block_node;
+
+/* This is the actual structure of the "bootcoin" blockchain */
+typedef struct Blockchain 
+{
+    block_node *chain;
+    transaction_node *unconfirmed_transactions;
+    uint64_t cur_index;
+    char last_block_hash[65];
+    block last_block;
+}
+Blockchain;
 
 
 /**
@@ -59,14 +78,14 @@ int attach_to_block(block *block, transaction_node *tr)
     }
 
     // if the chain is empty so far, this is the first transaction in the block. Make it the first transaction and return success
-    if(!block->chain)
+    if(!block->tr_chain)
     {
-        block->chain = tr;
+        block->tr_chain = tr;
         return 0;
     }
 
     // if chain already exists, traverse to the end and attach the current transaction to the end
-    for (transaction_node *trav = block->chain; trav != NULL; trav = trav->next)
+    for (transaction_node *trav = block->tr_chain; trav != NULL; trav = trav->next)
     {
         if (trav->next == NULL)
         {
@@ -115,80 +134,107 @@ char *transaction_string(transaction *tr)
 * @param result: the string where the resulting hash will be placed
 * @return: 0 upon successful hashing of a block, a negative integer if anything goes wrong
 */
- int block_hash(block *cur_block, char result[65])
+int block_hash(block *cur_block, char result[65])
 {
     // don't pass in empty paramters please
-     if(!cur_block || !result || !cur_block->chain)
+    if (!cur_block || !result)
     {
         return -1;
     }
 
-     // for some reason the first transaction needs to be sanitized so copy it into a freshly full 0 initialized string then pass it back to tran_string
-    char *tran_string = transaction_string(&cur_block->chain->tran);
-    size_t initial_size = strlen(tran_string);
-    char *sanitize = malloc(initial_size + 1);
-    if (!sanitize)
+    char* block_str = NULL;
+    size_t block_str_size = 0;
+
+    // if the block passed in is the genesis block, there will be no transactions
+    if (cur_block->index == 0)
     {
-        return -2;
-    }
-    memset(sanitize, 0, initial_size + 1);
-    strcpy(sanitize, tran_string);
-    free(tran_string);
-    tran_string = sanitize;
-
-    // failure? piss.
-    if(!tran_string)
-    {
-        return -3;
-    }
-
-    // each transaction in the block needs to be converted into a string to properly hash it
-    for(transaction_node *first = cur_block->chain->next; first != NULL; first = first->next)
-    {
-        size_t cur_size = strlen(tran_string) + 1;
-        char *transtr_cpy = malloc(cur_size);
-        if (!transtr_cpy)
+        // block will only contain basic metadata and an empty hash
+        block_str_size = (sizeof(uint64_t) * 2) + 64 + sizeof(time_t) + strlen(cur_block->last_hash);
+        block_str = malloc(block_str_size);
+        if (!block_str)
         {
-            return -4;
+            return -6;
         }
+        memset(block_str, 0, block_str_size);
+        snprintf(block_str, block_str_size, "%llu%llu%s%llu", cur_block->index, cur_block->stake_ind, cur_block->last_hash, cur_block->timestamp);
 
-        // copy current tran_string into a temporary copy so that it can be resized
-        memset(transtr_cpy, 0, cur_size);
-        strncpy(transtr_cpy, tran_string, cur_size);
-        char *next_str = transaction_string(&first->tran);
-        if(!next_str)
-        {
-            free(transtr_cpy);
-            break;
-        }
-        size_t new_size = strlen(transtr_cpy) + strlen(next_str);
-        tran_string = malloc(new_size);
-        if(!tran_string)
-        {
-            free(transtr_cpy);
-            free(next_str);
-            return -5;
-        }
-
-        // Take the next transaction string then add it to the end of the current transaction_string. 
-        memset(tran_string, 0, new_size);
-        strncat(tran_string, transtr_cpy, strlen(transtr_cpy));
-        strncat(tran_string, next_str, strlen(next_str));
-        free(next_str);
-        free(transtr_cpy);
     }
 
-    // take all of the info from the block and paste it into a hashable string that contains all the data
-    size_t block_str_size = strlen(tran_string) + (sizeof(uint64_t) * 2) + 64 + sizeof(time_t) + strlen(cur_block->last_hash);
-    char *block_str = malloc(block_str_size);
-    if (!block_str)
+    else
     {
+        // only the genesis block should have an empty chain
+        if (!cur_block->tr_chain)
+        {
+            return -1;
+        }
+         
+        // for some reason the first transaction needs to be sanitized so copy it into a freshly full 0 initialized string then pass it back to tran_string
+        char* tran_string = transaction_string(&cur_block->tr_chain->tran);
+        size_t initial_size = strlen(tran_string) + 1;
+        char* sanitize = malloc(initial_size);
+        if (!sanitize)
+        {
+            return -2;
+        }
+        memset(sanitize, 0, initial_size);
+        strcpy(sanitize, tran_string);
         free(tran_string);
-        return -6;
+        tran_string = sanitize;
+
+        // failure? piss.
+        if (!tran_string)
+        {
+            return -3;
+        }
+
+        // each transaction in the block needs to be converted into a string to properly hash it
+        for (transaction_node* first = cur_block->tr_chain->next; first != NULL; first = first->next)
+        {
+            size_t cur_size = strlen(tran_string) + 1;
+            char* transtr_cpy = malloc(cur_size);
+            if (!transtr_cpy)
+            {
+                return -4;
+            }
+
+            // copy current tran_string into a temporary copy so that it can be resized
+            memset(transtr_cpy, 0, cur_size);
+            strncpy(transtr_cpy, tran_string, cur_size);
+            char* next_str = transaction_string(&first->tran);
+            if (!next_str)
+            {
+                free(transtr_cpy);
+                break;
+            }
+            size_t new_size = strlen(transtr_cpy) + strlen(next_str);
+            tran_string = malloc(new_size);
+            if (!tran_string)
+            {
+                free(transtr_cpy);
+                free(next_str);
+                return -5;
+            }
+
+            // Take the next transaction string then add it to the end of the current transaction_string. 
+            memset(tran_string, 0, new_size);
+            strncat(tran_string, transtr_cpy, strlen(transtr_cpy));
+            strncat(tran_string, next_str, strlen(next_str));
+            free(next_str);
+            free(transtr_cpy);
+        }
+
+        // take all of the info from the block and paste it into a hashable string that contains all the data
+        block_str_size = strlen(tran_string) + (sizeof(uint64_t) * 2) + 64 + sizeof(time_t) + strlen(cur_block->last_hash);
+        block_str = malloc(block_str_size);
+        if (!block_str)
+        {
+            free(tran_string);
+            return -6;
+        }
+        memset(block_str, 0, block_str_size);
+        snprintf(block_str, block_str_size, "%llu%llu%s%s%llu", cur_block->index, cur_block->stake_ind, cur_block->last_hash, tran_string, cur_block->timestamp);
+        free(tran_string);
     }
-    memset(block_str, 0, block_str_size);
-    snprintf(block_str, block_str_size, "%llu%llu%llu%s%s", cur_block->index, cur_block->stake_ind, cur_block->timestamp, cur_block->last_hash, tran_string);
-    free(tran_string);
 
     // initialize OpenSSL and load the SHA3-256 algorithm to generate hash
     uint32_t digest_length = SHA256_DIGEST_LENGTH;
@@ -221,6 +267,22 @@ char *transaction_string(transaction *tr)
 }
 
 
+/**
+* Creates the initial block in the blockchain
+*/
+block genesis_block(void)
+{
+    // set all params to initializers for a Blockchain, with no transactions and the starting indexes for both chains.
+    block genesis;
+    genesis.index = 0;
+    genesis.stake_ind = 0;
+    strncat(genesis.last_hash, "0", 2);
+    genesis.tr_chain = NULL;
+    genesis.timestamp = time(NULL);
+    return genesis;
+}
+
+
 int main()
 {
     transaction t1;
@@ -242,7 +304,7 @@ int main()
     test_block.timestamp = time(NULL);
     test_block.stake_ind = 91;
     test_block.index = 1;
-    test_block.chain = NULL;
+    test_block.tr_chain = NULL;
     strcpy(test_block.last_hash, "asduibwfeiufch2fu2iedbhwbeu2idbuef2bifhe8iof2");
     struct transaction_node n1;
     n1.tran = t1;
@@ -258,6 +320,16 @@ int main()
     attach_to_block(&test_block, &n3);
 
     char res[65];
-    block_hash(&test_block, res);
-    printf("%s\n", res);
+    for (int i = 0; i < 5; i++)
+    {
+        block_hash(&test_block, res);
+        printf("%s\n", res);
+    }
+
+    block genesis = genesis_block();
+    for (int i = 0; i < 5; i++)
+    {
+        block_hash(&genesis, res);
+        printf("%s\n", res);
+    }
 }
