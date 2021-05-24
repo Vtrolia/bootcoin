@@ -37,7 +37,7 @@ typedef struct block
 {
     uint64_t index;
     uint64_t stake_ind;
-    char last_hash[64];
+    char last_hash[65];
     transaction_node *tr_chain;
     time_t timestamp;
 }
@@ -64,28 +64,29 @@ Blockchain;
 
 
 /**
-* attaches a transaction to a chain
-* @param block: pointer to the current block
+* attaches a transaction to a transaction chain
+* @param origin: the first transaction in a chain
 * @param tr: new transaction to add to the block
 * @return: 0 upon success, -1 upon failure
 */
-int attach_to_block(block *block, transaction_node *tr)
+int add_transaction_to_chain(transaction_node *origin, transaction_node *tr)
 {
     // if an invalid pointer is passed in, return failure
-    if(!block || !tr)
+    if(!origin || !tr)
     {
         return -1;
     }
 
-    // if the chain is empty so far, this is the first transaction in the block. Make it the first transaction and return success
-    if(!block->tr_chain)
+    // if theres only one transaction, don't need to try and traverse the whole chain
+    if (!origin->next)
     {
-        block->tr_chain = tr;
+        origin->next = tr;
+        tr->next = NULL;
         return 0;
     }
 
     // if chain already exists, traverse to the end and attach the current transaction to the end
-    for (transaction_node *trav = block->tr_chain; trav != NULL; trav = trav->next)
+    for (transaction_node *trav = origin; trav != NULL; trav = trav->next)
     {
         if (trav->next == NULL)
         {
@@ -157,7 +158,6 @@ int block_hash(block *cur_block, char result[65])
         }
         memset(block_str, 0, block_str_size);
         snprintf(block_str, block_str_size, "%llu%llu%s%llu", cur_block->index, cur_block->stake_ind, cur_block->last_hash, cur_block->timestamp);
-
     }
 
     else
@@ -283,8 +283,44 @@ block genesis_block(void)
 }
 
 
+/**
+* takes a chain of transactions and creates a new block on the blockchain
+* @param bc: active blockchain
+* @param stake_index: current proof of work, will be shifted to a proof of stake soon
+* @param transactions: chain of verified transactions to go on a block
+* @return new_block: the block just created, index will be -1 upon error
+*/
+block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* transactions)
+{
+    // make sure the parameters exist and it's not creating the genesis block
+    if (!bc || bc->cur_index < 1 || !transactions)
+    {
+        block new_block;
+        new_block.index = -1;
+        return new_block;
+    }
+    
+    // set the indexes and incriment then blockchain's global index of blocks
+    block new_block;
+    new_block.index = bc->cur_index;
+    bc->cur_index++;
+    new_block.stake_ind = stake_index;
+
+    // add time and transactions
+    strncpy(new_block.last_hash, bc->last_block_hash, 65);
+    new_block.tr_chain = transactions;
+    new_block.timestamp = time(NULL);
+
+    return new_block;
+}
+
+
 int main()
 {
+    Blockchain battalion_commander;
+    battalion_commander.chain = NULL;
+    battalion_commander.cur_index = 2;
+    strncpy(battalion_commander.last_block_hash, "0", 2);
     transaction t1;
     t1.amount = 30;
     t1.sender = "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub";
@@ -300,12 +336,6 @@ int main()
     t3.sender = "ak_2hrCzNBYhFe4qPDF7inqnKjykJtYZVX1zQGpV4N9nqUzZu6E4t";
     t3.recipient = "ak_2hrCzNBYhFe4qPDF7inqnKjykJtYZVX1zQGpV4N9nqUzZu6E4t";
 
-    block test_block;
-    test_block.timestamp = time(NULL);
-    test_block.stake_ind = 91;
-    test_block.index = 1;
-    test_block.tr_chain = NULL;
-    strcpy(test_block.last_hash, "asduibwfeiufch2fu2iedbhwbeu2idbuef2bifhe8iof2");
     struct transaction_node n1;
     n1.tran = t1;
     n1.next = NULL;
@@ -315,21 +345,17 @@ int main()
     struct transaction_node n3;
     n3.tran = t3;
     n3.next = NULL;
-    attach_to_block(&test_block, &n1);
-    attach_to_block(&test_block, &n2);
-    attach_to_block(&test_block, &n3);
+    block gen_block = genesis_block();
+    
+    add_transaction_to_chain(&n1, &n2);
+    add_transaction_to_chain(&n1, &n3);
+    block test_block = create_block(&battalion_commander, 1, &n1);
+    
 
     char res[65];
     for (int i = 0; i < 5; i++)
     {
         block_hash(&test_block, res);
-        printf("%s\n", res);
-    }
-
-    block genesis = genesis_block();
-    for (int i = 0; i < 5; i++)
-    {
-        block_hash(&genesis, res);
         printf("%s\n", res);
     }
 }
