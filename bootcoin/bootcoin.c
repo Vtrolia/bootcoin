@@ -101,6 +101,46 @@ int add_transaction_to_chain(transaction_node *origin, transaction_node *tr)
 
 
 /**
+* Adds a new block to the block chain.
+* @param bc: current blockchain
+* @param new_block: the newest generated block to be added to the chain
+* @return: 0 upon success, a negative integer upon failure
+*/
+int add_block_to_chain(Blockchain *bc, block_node *new_block)
+{
+    // no NULL params pls
+    if (!bc || !new_block)
+    {
+        return -1;
+    }
+
+    // genesis block should already exist in Blockchain
+    if (!bc->chain)
+    {
+        return -2;
+    }
+
+    // traverse the block chain for the last entry and attach the new block to the end
+    for (block_node *trav = bc->chain; trav != NULL; trav = trav->next)
+    {
+        if (trav->next == NULL)
+        {
+            trav->next = new_block;
+            new_block->next = NULL;
+
+            // set most recent block data to top of the blockchain
+            bc->last_block = new_block->data;
+            block_hash(&new_block->data, bc->last_block_hash);
+        }
+        break;
+    }
+
+    return 0;
+}
+
+
+
+/**
 * Converts a transaction into a hashable string
 * @param tr: pointer to a transaction
 * @return: a newly malloc'd string containing the details of the transaction passed in. NULL if there was an error
@@ -315,12 +355,42 @@ block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* trans
 }
 
 
+/**
+* Intitializes a Blockchain struct with all the basic gensis block info to create it. Also creates the genesis block and adds it to the chain.
+* If there is a failure in creating the blockchain, it will set the current index to -1 before it returns.
+*/
+Blockchain initialize_blockchain(void)
+{
+    // genesis block information
+    Blockchain block_chain;
+    block_chain.cur_index = 0;
+    strncpy(block_chain.last_block_hash, "0", 2);
+
+    // malloc the first block node so that the scope won't destroy the chain
+    block_node *bn = malloc(sizeof(block_node));
+    if (!bn)
+    {
+        block_chain.cur_index = -1;
+        return block_chain;
+    }
+
+    // create the genesis block and add it
+    bn->data = genesis_block();
+    bn->next = NULL;
+    block_chain.chain = bn;
+
+    // update index and last block so it can easily be popped later
+    block_chain.cur_index = 1;
+    block_chain.last_block = bn->data;
+    return block_chain;
+
+
+}
+
+
 int main()
 {
-    Blockchain battalion_commander;
-    battalion_commander.chain = NULL;
-    battalion_commander.cur_index = 2;
-    strncpy(battalion_commander.last_block_hash, "0", 2);
+    Blockchain battalion_commander = initialize_blockchain();
     transaction t1;
     t1.amount = 30;
     t1.sender = "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub";
@@ -345,17 +415,21 @@ int main()
     struct transaction_node n3;
     n3.tran = t3;
     n3.next = NULL;
-    block gen_block = genesis_block();
     
     add_transaction_to_chain(&n1, &n2);
     add_transaction_to_chain(&n1, &n3);
+    battalion_commander.unconfirmed_transactions = &n1;
+
     block test_block = create_block(&battalion_commander, 1, &n1);
+    add_block_to_chain(&battalion_commander, &test_block);
     
 
     char res[65];
+    char first_hash[65];
     for (int i = 0; i < 5; i++)
     {
-        block_hash(&test_block, res);
-        printf("%s\n", res);
+        block_hash(&battalion_commander.last_block, res);
+        block_hash(&battalion_commander.chain->data, first_hash);
+        printf("hash made: %s\nshould be hash: %s\nfirst black hash %s\n current index: %llu", res, battalion_commander.last_block_hash, first_hash, battalion_commander.cur_index);
     }
 }
