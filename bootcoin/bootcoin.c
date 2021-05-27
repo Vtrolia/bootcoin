@@ -491,6 +491,7 @@ int check_block_validity(block *last_block, block *proposed_block)
     // make sure the hash of the previous block is the value the new block has for last_hash
     if (strncmp(last_hash, proposed_block->last_hash, 64) != 0)
     {
+        printf("failed hash\n");
         return 0;
     }
 
@@ -501,12 +502,14 @@ int check_block_validity(block *last_block, block *proposed_block)
         {
             return -3;
         }
+        printf("failed proof\n");
         return 0;
     }
 
     // if this block was made before the last one, invalid
     if (last_block->timestamp >= proposed_block->timestamp)
     {
+        printf("failed timestamp %llu beats %llu\n", last_block->timestamp, proposed_block->timestamp);
         return 0;
     }
 
@@ -516,7 +519,7 @@ int check_block_validity(block *last_block, block *proposed_block)
 
 
 /**
-* Intitializes a Blockchain struct with all the basic gensis block info to create it. Also creates the genesis block and adds it to the chain.
+* Intitializes a Blockchain struct with all the basic genisys block info to create it. Also creates the genesis block and adds it to the chain.
 * If there is a failure in creating the blockchain, it will set the current index to -1 before it returns.
 */
 Blockchain initialize_blockchain(void)
@@ -546,6 +549,35 @@ Blockchain initialize_blockchain(void)
     return block_chain;
 
 
+}
+
+
+/**
+* This is where the money is made in Proof-of-Work based cryptocurrencies. The miner will compute the proof of work and then create a 
+* block. This will be sent to be proofread then added to the blockchain.
+* @param bc: current blockchain
+* @return mined_block: the block mined by the miner
+*/
+block mine_block(Blockchain* bc)
+{
+    // complete the proof-of-work
+    uint64_t new_proof = proof_of_work(bc->last_block.stake_ind);
+    block mined_block;
+    if (bootcoin_errno != BOOTCOIN_NOERROR)
+    {
+        mined_block.index = 0;
+        return mined_block;
+    }
+
+    // then create the block
+    mined_block = create_block(bc, bc->unconfirmed_transactions);
+    if (mined_block.index == 0)
+    {
+        return mined_block;
+    }
+
+    mined_block.stake_ind = new_proof;
+    return mined_block;
 }
 
 
@@ -579,10 +611,28 @@ int main()
     
     add_transaction_to_chain(&n1, &n2);
     add_transaction_to_chain(&n1, &n3);
-    uint64_t new_proof = proof_of_work(battalion_commander.last_block.stake_ind);
     battalion_commander.unconfirmed_transactions = &n1;
-    block test_block = create_block(&battalion_commander, &n1);
-    test_block.stake_ind = new_proof;
-    printf("result: %i\nerrno: %i\n\n", check_block_validity(&battalion_commander.last_block, &test_block), bootcoin_errno);
+    block test_block = mine_block(&battalion_commander);
+    if (test_block.index == 0)
+    {
+        return -1;
+    }
+
+    test_block.timestamp += 100;
+    if (check_block_validity(&battalion_commander.last_block, &test_block))
+    {
+        if (add_block_to_chain(&battalion_commander, &test_block) != 0)
+        {
+            printf("Failed to add block\n");
+            return -2;
+        }
+        char hash_of_test[65] = { 0 };
+        block_hash(&test_block, hash_of_test);
+        printf("Successfully added block %s, aka %s at index %llu at %llu\n", hash_of_test, battalion_commander.last_block_hash, test_block.index, test_block.timestamp);
+        return 0;
+    }
+
+    printf("Block was not valid\n");
+    return -3;
     
 }
