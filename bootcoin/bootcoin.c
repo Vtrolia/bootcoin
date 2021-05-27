@@ -15,6 +15,14 @@
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 
+// bootcoin errno
+#define BOOTCOIN_NOERROR 0
+#define BOOTCOIN_MEMORY_ERROR 1
+#define BOOTCOIN_INVALID_PARAM_ERROR 2
+#define BOOTCOIN_UNKNOWN_ERROR 255
+
+static int bootcoin_errno = BOOTCOIN_NOERROR;
+
 /* Basic information given for each bootcoin transaction for a block in the blockchain, a sender address, a recipient address, and the number of coins exchanged */
 typedef struct transaction 
 {
@@ -64,6 +72,47 @@ Blockchain;
 
 
 /**
+* generates the Secure Hashing Algorithm 3 256 bit hash of the input string, and places the hash in a string passed in by the caller
+* @param input: string to be hashed
+* @param input_size: length of the input string
+* @return: 0 upon success, -1 upon failure
+*/
+int generate_sha3_256_hash(char* input, uint64_t input_size, char result[65])
+{
+    // initialize OpenSSL and load the SHA3-256 algorithm to generate hash
+    uint32_t digest_length = SHA256_DIGEST_LENGTH;
+    EVP_MD* sha = EVP_sha3_256();
+    uint8_t* digest = OPENSSL_malloc(SHA256_DIGEST_LENGTH);
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+
+    // if something can't be initialized, return error code
+    if (!sha || !digest || !ctx)
+    {
+        bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
+        return -1;
+    }
+
+    // hash the block string
+    EVP_DigestInit_ex(ctx, sha, NULL);
+    EVP_DigestUpdate(ctx, input, input_size);
+    EVP_DigestFinal_ex(ctx, digest, &digest_length);
+
+    // print out the hash digest in a readable format into the result string
+    for (unsigned int i = 0; i < digest_length; i++)
+    {
+        sprintf(result + (i * 2), "%02x", digest[i]);
+    }
+
+    // free then return success
+    EVP_MD_CTX_destroy(ctx);
+    OPENSSL_free(digest);
+    bootcoin_errno = BOOTCOIN_NOERROR;
+    return 0;
+}
+
+
+
+/**
 * attaches a transaction to a transaction chain
 * @param origin: the first transaction in a chain
 * @param tr: new transaction to add to the block
@@ -74,10 +123,12 @@ int add_transaction_to_chain(transaction_node *origin, transaction_node *tr)
     // if an invalid pointer is passed in, return failure
     if(!origin || !tr)
     {
+        bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
         return -1;
     }
 
     // if theres only one transaction, don't need to try and traverse the whole chain
+    bootcoin_errno = BOOTCOIN_NOERROR;
     if (!origin->next)
     {
         origin->next = tr;
@@ -109,6 +160,7 @@ int add_transaction_to_chain(transaction_node *origin, transaction_node *tr)
 int add_block_to_chain(Blockchain *bc, block_node *new_block)
 {
     // no NULL params pls
+    bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
     if (!bc || !new_block)
     {
         return -1;
@@ -121,6 +173,7 @@ int add_block_to_chain(Blockchain *bc, block_node *new_block)
     }
 
     // traverse the block chain for the last entry and attach the new block to the end
+    bootcoin_errno = BOOTCOIN_NOERROR;
     for (block_node *trav = bc->chain; trav != NULL; trav = trav->next)
     {
         if (trav->next == NULL)
@@ -150,6 +203,7 @@ char *transaction_string(transaction *tr)
     // if no transaction, no string
     if(!tr)
     {
+        bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
         return NULL;
     }
     
@@ -158,12 +212,14 @@ char *transaction_string(transaction *tr)
     char *result = malloc(res_size);
     if (!result)
     {
+        bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
         return NULL;
     }
 
     // set the result string to empty then print the transaction details
     memset(result, 0, res_size);
     snprintf(result, res_size, "%s%s%llu", tr->sender, tr->recipient, tr->amount);
+    bootcoin_errno = BOOTCOIN_NOERROR;
     return result;
 }
 
@@ -180,6 +236,7 @@ int block_hash(block *cur_block, char result[65])
     // don't pass in empty paramters please
     if (!cur_block || !result)
     {
+        bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
         return -1;
     }
 
@@ -194,6 +251,7 @@ int block_hash(block *cur_block, char result[65])
         block_str = malloc(block_str_size);
         if (!block_str)
         {
+            bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
             return -6;
         }
         memset(block_str, 0, block_str_size);
@@ -205,6 +263,7 @@ int block_hash(block *cur_block, char result[65])
         // only the genesis block should have an empty chain
         if (!cur_block->tr_chain)
         {
+            bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
             return -1;
         }
          
@@ -214,18 +273,13 @@ int block_hash(block *cur_block, char result[65])
         char* sanitize = malloc(initial_size);
         if (!sanitize)
         {
+            bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
             return -2;
         }
         memset(sanitize, 0, initial_size);
         strcpy(sanitize, tran_string);
         free(tran_string);
         tran_string = sanitize;
-
-        // failure? piss.
-        if (!tran_string)
-        {
-            return -3;
-        }
 
         // each transaction in the block needs to be converted into a string to properly hash it
         for (transaction_node* first = cur_block->tr_chain->next; first != NULL; first = first->next)
@@ -234,6 +288,7 @@ int block_hash(block *cur_block, char result[65])
             char* transtr_cpy = malloc(cur_size);
             if (!transtr_cpy)
             {
+                bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
                 return -4;
             }
 
@@ -252,7 +307,8 @@ int block_hash(block *cur_block, char result[65])
             {
                 free(transtr_cpy);
                 free(next_str);
-                return -5;
+                bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
+                return -6;
             }
 
             // Take the next transaction string then add it to the end of the current transaction_string. 
@@ -269,6 +325,7 @@ int block_hash(block *cur_block, char result[65])
         if (!block_str)
         {
             free(tran_string);
+            bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
             return -6;
         }
         memset(block_str, 0, block_str_size);
@@ -276,33 +333,15 @@ int block_hash(block *cur_block, char result[65])
         free(tran_string);
     }
 
-    // initialize OpenSSL and load the SHA3-256 algorithm to generate hash
-    uint32_t digest_length = SHA256_DIGEST_LENGTH;
-    EVP_MD *sha = EVP_sha3_256();
-    uint8_t *digest = OPENSSL_malloc(SHA256_DIGEST_LENGTH);
-    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-
-    if(!sha || !digest || !ctx)
+    // get the hash of the block, and return whether or not the operation was successful
+    if (generate_sha3_256_hash(block_str, block_str_size, result) != 0)
     {
         free(block_str);
         return -7;
     }
 
-    // hash the block string
-    EVP_DigestInit_ex(ctx, sha, NULL);
-    EVP_DigestUpdate(ctx, block_str, block_str_size);
-    EVP_DigestFinal_ex(ctx, digest, &digest_length);
-
-    // print out the hash digest in a readable format into the result string
-    for(unsigned int i = 0; i < digest_length; i++)
-    {
-        sprintf(result + (i * 2), "%02x", digest[i]);
-    }
-
-    // free then return success
-    EVP_MD_CTX_destroy(ctx);
-    OPENSSL_free(digest);
     free(block_str);
+    bootcoin_errno = BOOTCOIN_NOERROR;
     return 0;
 }
 
@@ -336,7 +375,7 @@ block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* trans
     if (!bc || bc->cur_index < 1 || !transactions)
     {
         block new_block;
-        new_block.index = -1;
+        bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
         return new_block;
     }
     
@@ -350,8 +389,74 @@ block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* trans
     strncpy(new_block.last_hash, bc->last_block_hash, 65);
     new_block.tr_chain = transactions;
     new_block.timestamp = time(NULL);
-
+    bootcoin_errno = BOOTCOIN_NOERROR;
     return new_block;
+}
+
+
+/**
+* As a placeholder, bootcoin is going to use a Proof-of-Work algorithm in order to process transactions. Because of this, a Bitcoin
+* style Proof-of-Work will be used. For this, a proposed proof number and the last proof number will be hashed together and if the last
+* four characters of the resulting hash are "0000", then it is considered valid.
+* @param last_proof: Proof-of-Work number from the last block
+* @param proof_guess: the current guess as to what this block's proof number will be
+* @return: 0 upon success, a negative integer upon failure
+*/
+int verify_proof(uint64_t last_proof, uint64_t proof_guess)
+{
+    // put both proofs together in a string
+    int guess_len = sizeof(uint64_t) * 2 + 1;
+    char* guess = malloc(guess_len);
+    if (!guess)
+    {
+        bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
+        return -1;
+    }
+    snprintf(guess, sizeof(uint64_t) * 2 + 1, "%llu%llu", last_proof, proof_guess);
+
+    // generate the hash value of the two proofs
+    char result[65] = { 0 };
+    if (generate_sha3_256_hash(guess, guess_len, result) != 0)
+    {
+        free(guess);
+        return -1;
+    }
+
+    // in order for a proof to be "correct", the hash must end with four trailing zeroes. if the hash does not end with this, it is
+    // not the correct proof.
+    free(guess);
+    bootcoin_errno = BOOTCOIN_NOERROR;
+    if (strncmp("0000", &result[guess_len - 4], 4) == 0)
+    {
+        return 0;
+    }
+    return -2;
+}
+
+
+/**
+* Placeholder Proof-of-Work function to be used while Proof-of-Stake algorithm is under development. Guesses different proofs unti; the
+* correct on is found
+* @param last_proof: the proof number of the previous block
+* @return new_proof: the proof number that creates the correct hash for this block
+*/
+uint64_t proof_of_work(uint64_t last_proof)
+{
+    uint64_t new_proof = 0;
+    int status;
+
+    // run until a correct proof is selected
+    while ((status = verify_proof(last_proof, new_proof)) != 0)
+    {
+        // if there was an error, return zero. in the verify_proof function, bootcoin_errno is set accordingly so 
+        // 0 is not mistaken as a correct proof
+        if (status < 0)
+            return 0;
+
+        new_proof++;
+    }
+
+    return new_proof;
 }
 
 
@@ -390,7 +495,7 @@ Blockchain initialize_blockchain(void)
 
 int main()
 {
-    Blockchain battalion_commander = initialize_blockchain();
+    /*Blockchain battalion_commander = initialize_blockchain();
     transaction t1;
     t1.amount = 30;
     t1.sender = "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub";
@@ -431,5 +536,11 @@ int main()
         block_hash(&battalion_commander.last_block, res);
         block_hash(&battalion_commander.chain->data, first_hash);
         printf("hash made: %s\nshould be hash: %s\nfirst black hash %s\n current index: %llu", res, battalion_commander.last_block_hash, first_hash, battalion_commander.cur_index);
-    }
+    }*/
+
+   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(1));
+   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(32432542));
+   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(433));
+   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(0));
+   printf("%i\n", bootcoin_errno);
 }
