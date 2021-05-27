@@ -77,7 +77,7 @@ Blockchain;
 * @param input_size: length of the input string
 * @return: 0 upon success, -1 upon failure
 */
-int generate_sha3_256_hash(char* input, uint64_t input_size, char result[65])
+int generate_sha3_256_hash(char* input, size_t input_size, char result[65])
 {
     // initialize OpenSSL and load the SHA3-256 algorithm to generate hash
     uint32_t digest_length = SHA256_DIGEST_LENGTH;
@@ -152,45 +152,70 @@ int add_transaction_to_chain(transaction_node *origin, transaction_node *tr)
 
 
 /**
-* Adds a new block to the block chain.
-* @param bc: current blockchain
-* @param new_block: the newest generated block to be added to the chain
+* As a placeholder, bootcoin is going to use a Proof-of-Work algorithm in order to process transactions. Because of this, a Bitcoin
+* style Proof-of-Work will be used. For this, a proposed proof number and the last proof number will be hashed together and if the last
+* four characters of the resulting hash are "0000", then it is considered valid.
+* @param last_proof: Proof-of-Work number from the last block
+* @param proof_guess: the current guess as to what this block's proof number will be
 * @return: 0 upon success, a negative integer upon failure
 */
-int add_block_to_chain(Blockchain *bc, block_node *new_block)
+int verify_proof(uint64_t last_proof, uint64_t proof_guess)
 {
-    // no NULL params pls
-    bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
-    if (!bc || !new_block)
+    // put both proofs together in a string
+    int guess_len = sizeof(uint64_t) * 2 + 1;
+    char* guess = malloc(guess_len);
+    if (!guess)
     {
+        bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
+        return -1;
+    }
+    snprintf(guess, sizeof(uint64_t) * 2 + 1, "%llu%llu", last_proof, proof_guess);
+
+    // generate the hash value of the two proofs
+    char result[65] = { 0 };
+    if (generate_sha3_256_hash(guess, guess_len, result) != 0)
+    {
+        free(guess);
         return -1;
     }
 
-    // genesis block should already exist in Blockchain
-    if (!bc->chain)
-    {
-        return -2;
-    }
-
-    // traverse the block chain for the last entry and attach the new block to the end
+    // in order for a proof to be "correct", the hash must end with four trailing zeroes. if the hash does not end with this, it is
+    // not the correct proof.
+    free(guess);
     bootcoin_errno = BOOTCOIN_NOERROR;
-    for (block_node *trav = bc->chain; trav != NULL; trav = trav->next)
+    if (strncmp("0000", &result[guess_len - 4], 4) == 0)
     {
-        if (trav->next == NULL)
-        {
-            trav->next = new_block;
-            new_block->next = NULL;
-
-            // set most recent block data to top of the blockchain
-            bc->last_block = new_block->data;
-            block_hash(&new_block->data, bc->last_block_hash);
-        }
-        break;
+        return 0;
     }
-
-    return 0;
+    return -2;
 }
 
+
+/**
+* Placeholder Proof-of-Work function to be used while Proof-of-Stake algorithm is under development. Guesses different proofs unti; the
+* correct on is found
+* @param last_proof: the proof number of the previous block
+* @return new_proof: the proof number that creates the correct hash for this block
+*/
+uint64_t proof_of_work(uint64_t last_proof)
+{
+    uint64_t new_proof = 0;
+    int status;
+
+    // run until a correct proof is selected
+    while ((status = verify_proof(last_proof, new_proof)) != 0)
+    {
+        // if there was an error, return zero. Bootcoin_errno is set accordingly so 0 is not mistaken as a correct proof
+        if (status == -1)
+        {
+            return 0;
+        }
+
+        new_proof++;
+    }
+
+    return new_proof;
+}
 
 
 /**
@@ -365,16 +390,16 @@ block genesis_block(void)
 /**
 * takes a chain of transactions and creates a new block on the blockchain
 * @param bc: active blockchain
-* @param stake_index: current proof of work, will be shifted to a proof of stake soon
 * @param transactions: chain of verified transactions to go on a block
 * @return new_block: the block just created, index will be -1 upon error
 */
-block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* transactions)
+block create_block(Blockchain* bc, transaction_node* transactions)
 {
     // make sure the parameters exist and it's not creating the genesis block
     if (!bc || bc->cur_index < 1 || !transactions)
     {
         block new_block;
+        new_block.index = 0;
         bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
         return new_block;
     }
@@ -383,7 +408,7 @@ block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* trans
     block new_block;
     new_block.index = bc->cur_index;
     bc->cur_index++;
-    new_block.stake_ind = stake_index;
+    new_block.stake_ind = 0;
 
     // add time and transactions
     strncpy(new_block.last_hash, bc->last_block_hash, 65);
@@ -395,68 +420,98 @@ block create_block(Blockchain* bc, uint64_t stake_index, transaction_node* trans
 
 
 /**
-* As a placeholder, bootcoin is going to use a Proof-of-Work algorithm in order to process transactions. Because of this, a Bitcoin
-* style Proof-of-Work will be used. For this, a proposed proof number and the last proof number will be hashed together and if the last
-* four characters of the resulting hash are "0000", then it is considered valid.
-* @param last_proof: Proof-of-Work number from the last block
-* @param proof_guess: the current guess as to what this block's proof number will be
+* Adds a new block to the block chain.
+* @param bc: current blockchain
+* @param new_block: the newest generated block to be added to the chain
 * @return: 0 upon success, a negative integer upon failure
 */
-int verify_proof(uint64_t last_proof, uint64_t proof_guess)
+int add_block_to_chain(Blockchain* bc, block_node* new_block)
 {
-    // put both proofs together in a string
-    int guess_len = sizeof(uint64_t) * 2 + 1;
-    char* guess = malloc(guess_len);
-    if (!guess)
+    // no NULL params pls
+    bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
+    if (!bc || !new_block)
     {
-        bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
-        return -1;
-    }
-    snprintf(guess, sizeof(uint64_t) * 2 + 1, "%llu%llu", last_proof, proof_guess);
-
-    // generate the hash value of the two proofs
-    char result[65] = { 0 };
-    if (generate_sha3_256_hash(guess, guess_len, result) != 0)
-    {
-        free(guess);
         return -1;
     }
 
-    // in order for a proof to be "correct", the hash must end with four trailing zeroes. if the hash does not end with this, it is
-    // not the correct proof.
-    free(guess);
+    // genesis block should already exist in Blockchain
+    if (!bc->chain)
+    {
+        return -2;
+    }
+
+    // traverse the block chain for the last entry and attach the new block to the end
     bootcoin_errno = BOOTCOIN_NOERROR;
-    if (strncmp("0000", &result[guess_len - 4], 4) == 0)
+    for (block_node* trav = bc->chain; trav != NULL; trav = trav->next)
     {
-        return 0;
+        if (trav->next == NULL)
+        {
+            trav->next = new_block;
+            new_block->next = NULL;
+
+            // set most recent block data to top of the blockchain
+            bc->last_block = new_block->data;
+            block_hash(&new_block->data, bc->last_block_hash);
+        }
+        break;
     }
-    return -2;
+
+    return 0;
 }
 
 
 /**
-* Placeholder Proof-of-Work function to be used while Proof-of-Stake algorithm is under development. Guesses different proofs unti; the
-* correct on is found
-* @param last_proof: the proof number of the previous block
-* @return new_proof: the proof number that creates the correct hash for this block
+* Double checks the work done by the miner in the current block is valid. 
+* @param last_block: the most recently added block in the blockchain
+* @param proposed_block: the block that is trying to be added to the blockchaijn
+* @returns: 1 upon a valid block, 0 upon unvalid block. A negative int is returned for errors and bootcoin_errno is set accordingly
 */
-uint64_t proof_of_work(uint64_t last_proof)
+int check_block_validity(block *last_block, block *proposed_block)
 {
-    uint64_t new_proof = 0;
-    int status;
-
-    // run until a correct proof is selected
-    while ((status = verify_proof(last_proof, new_proof)) != 0)
+    // invalid param check
+    if (!last_block || !proposed_block)
     {
-        // if there was an error, return zero. in the verify_proof function, bootcoin_errno is set accordingly so 
-        // 0 is not mistaken as a correct proof
-        if (status < 0)
-            return 0;
-
-        new_proof++;
+        bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
+        return - 1;
     }
 
-    return new_proof;
+    // check to see if the new block has the correc index
+    if (proposed_block->index != (last_block->index + 1))
+    {
+        return 0;
+    }
+
+    // checking for block hash errors
+    char last_hash[65] = { 0 };
+    if (block_hash(last_block, last_hash) < 0)
+    {
+        return -2;
+    }
+
+    // make sure the hash of the previous block is the value the new block has for last_hash
+    if (strncmp(last_hash, proposed_block->last_hash, 64) != 0)
+    {
+        return 0;
+    }
+
+    // ensure that the Proof-of-Work was accurately completed by the miner
+    if (verify_proof(last_block->stake_ind, proposed_block->stake_ind) != 0)
+    {
+        if (bootcoin_errno != BOOTCOIN_NOERROR)
+        {
+            return -3;
+        }
+        return 0;
+    }
+
+    // if this block was made before the last one, invalid
+    if (last_block->timestamp >= proposed_block->timestamp)
+    {
+        return 0;
+    }
+
+    // 1, aka true, is success
+    return 1;
 }
 
 
@@ -483,6 +538,7 @@ Blockchain initialize_blockchain(void)
     bn->data = genesis_block();
     bn->next = NULL;
     block_chain.chain = bn;
+    block_hash(&bn->data, block_chain.last_block_hash);
 
     // update index and last block so it can easily be popped later
     block_chain.cur_index = 1;
@@ -495,7 +551,7 @@ Blockchain initialize_blockchain(void)
 
 int main()
 {
-    /*Blockchain battalion_commander = initialize_blockchain();
+    Blockchain battalion_commander = initialize_blockchain();
     transaction t1;
     t1.amount = 30;
     t1.sender = "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub";
@@ -523,24 +579,10 @@ int main()
     
     add_transaction_to_chain(&n1, &n2);
     add_transaction_to_chain(&n1, &n3);
+    uint64_t new_proof = proof_of_work(battalion_commander.last_block.stake_ind);
     battalion_commander.unconfirmed_transactions = &n1;
-
-    block test_block = create_block(&battalion_commander, 1, &n1);
-    add_block_to_chain(&battalion_commander, &test_block);
+    block test_block = create_block(&battalion_commander, &n1);
+    test_block.stake_ind = new_proof;
+    printf("result: %i\nerrno: %i\n\n", check_block_validity(&battalion_commander.last_block, &test_block), bootcoin_errno);
     
-
-    char res[65];
-    char first_hash[65];
-    for (int i = 0; i < 5; i++)
-    {
-        block_hash(&battalion_commander.last_block, res);
-        block_hash(&battalion_commander.chain->data, first_hash);
-        printf("hash made: %s\nshould be hash: %s\nfirst black hash %s\n current index: %llu", res, battalion_commander.last_block_hash, first_hash, battalion_commander.cur_index);
-    }*/
-
-   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(1));
-   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(32432542));
-   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(433));
-   printf("final result: %llu\n\n", (unsigned long long)proof_of_work(0));
-   printf("%i\n", bootcoin_errno);
 }
