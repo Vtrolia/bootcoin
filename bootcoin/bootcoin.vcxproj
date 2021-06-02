@@ -22,6 +22,14 @@
     <ClCompile Include="bootcoin.c">
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">C:\Users\Vtrol\vcpkg\installed\x86-windows\include</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="crypto.c" />
+    <ClCompile Include="structs\block.c" />
+    <ClCompile Include="structs\transaction.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="crypto.h" />
+    <ClInclude Include="structs\block.h" />
+    <ClInclude Include="structs\transaction.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

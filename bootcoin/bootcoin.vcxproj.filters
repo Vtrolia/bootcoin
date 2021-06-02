@@ -18,5 +18,25 @@
     <ClCompile Include="bootcoin.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="structs\transaction.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="structs\block.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="structs\transaction.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="structs\block.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
