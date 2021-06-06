@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "../err/bootcoin_errno.h"
+#include "../crypto.h"
 
 /* Basic information given for each bootcoin transaction for a block in the blockchain, a sender address, a recipient address, and the number of coins exchanged */
 typedef struct transaction
@@ -15,7 +15,7 @@ typedef struct transaction
     char* recipient;
     uint64_t amount;
     time_t timestamp;
-    char hash[64];
+    char hash[HASH_LENGTH];
 }
 transaction;
 
@@ -29,3 +29,4 @@ transaction_node;
 
 int add_transaction_to_chain(transaction_node* origin, transaction_node* tr);
 char* transaction_string(transaction* tr);
+transaction create_transaction(char* sender, char* recipient, uint64_t amount);

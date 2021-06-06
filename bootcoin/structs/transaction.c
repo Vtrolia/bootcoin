@@ -2,6 +2,68 @@
 
 
 /**
+* Creates the most basic building block for a blockchain, a transaction. This is what a miner will verify and then
+* create a hash of in order to verify and form into a block to then recieve bootcoins in exchange for its processing power
+* @param sender: sender address
+* @param recipient: recipient address
+* @param amount: amount of bootcoins to exchange
+* @return new_transaction: the new transaction, with a creation time and a hash, timestamp will be set to 0 in case of
+* invalid parameters or 1 in case of a memory error
+*/
+transaction create_transaction(char* sender, char* recipient, uint64_t amount)
+{
+    // invalid params gotta go
+    transaction new_transaction;
+    if (!sender || !recipient || amount < 1)
+    {
+        new_transaction.timestamp = 0;
+        return new_transaction;
+    }
+
+    // copy/paste all the basic transaction info
+    new_transaction.amount = amount;
+    new_transaction.sender = sender;
+    new_transaction.recipient = recipient;
+
+    // get the time the transaction was created
+    new_transaction.timestamp = time(NULL);
+
+    // check for memory errors when converting new_transaction into a string
+    char* trs = transaction_string(&new_transaction);
+    if (!trs)
+    {
+        new_transaction.timestamp = 1;
+        return new_transaction;
+    }
+
+    // create the sha3 hash of the transaction
+    char tr_hash[HASH_LENGTH] = { 0 };
+    int hash_res = 0;
+    if ((hash_res = generate_sha3_256_hash(trs, strlen(trs), tr_hash)) != 0)
+    {
+        if (hash_res == -1)
+        {
+            new_transaction.timestamp = 0;
+        }
+
+        else
+        {
+            new_transaction.timestamp = 1;
+        }
+        
+        free(trs);
+        return new_transaction;
+    }
+
+    // don't forget to free malloc'd memory
+    free(trs);
+    strncpy(new_transaction.hash, tr_hash, HASH_LENGTH);
+    return new_transaction;
+   
+}
+
+
+/**
 * attaches a transaction to a transaction chain
 * @param origin: the first transaction in a chain
 * @param tr: new transaction to add to the block

@@ -21,7 +21,7 @@ int verify_proof(uint64_t last_proof, uint64_t proof_guess)
     snprintf(guess, sizeof(uint64_t) * 2 + 1, "%llu%llu", last_proof, proof_guess);
 
     // generate the hash value of the two proofs
-    char result[65] = { 0 };
+    char result[HASH_LENGTH] = { 0 };
     if (generate_sha3_256_hash(guess, guess_len, result) != 0)
     {
         free(guess);
@@ -73,7 +73,7 @@ uint64_t proof_of_work(uint64_t last_proof)
 * @param result: the string where the resulting hash will be placed
 * @return: 0 upon successful hashing of a block, a negative integer if anything goes wrong
 */
-int block_hash(block* cur_block, char result[65])
+int block_hash(block* cur_block, char result[HASH_LENGTH])
 {
     // don't pass in empty paramters please
     if (!cur_block || !result)
@@ -92,7 +92,7 @@ int block_hash(block* cur_block, char result[65])
         block_str = malloc(block_str_size);
         if (!block_str)
         {
-            return -6;
+            return -2;
         }
         memset(block_str, 0, block_str_size);
         snprintf(block_str, block_str_size, "%llu%llu%s%llu", cur_block->index, cur_block->stake_ind, cur_block->last_hash, cur_block->timestamp);
@@ -126,7 +126,7 @@ int block_hash(block* cur_block, char result[65])
             char* transtr_cpy = malloc(cur_size);
             if (!transtr_cpy)
             {
-                return -4;
+                return -2;
             }
 
             // copy current tran_string into a temporary copy so that it can be resized
@@ -144,7 +144,7 @@ int block_hash(block* cur_block, char result[65])
             {
                 free(transtr_cpy);
                 free(next_str);
-                return -6;
+                return -2;
             }
 
             // Take the next transaction string then add it to the end of the current transaction_string. 
@@ -161,7 +161,7 @@ int block_hash(block* cur_block, char result[65])
         if (!block_str)
         {
             free(tran_string);
-            return -6;
+            return -2;
         }
         memset(block_str, 0, block_str_size);
         snprintf(block_str, block_str_size, "%llu%llu%s%s%llu", cur_block->index, cur_block->stake_ind, cur_block->last_hash, tran_string, cur_block->timestamp);
@@ -172,7 +172,7 @@ int block_hash(block* cur_block, char result[65])
     if (generate_sha3_256_hash(block_str, block_str_size, result) != 0)
     {
         free(block_str);
-        return -7;
+        return -3;
     }
 
     free(block_str);

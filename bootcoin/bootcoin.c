@@ -31,7 +31,7 @@ typedef struct Blockchain
     block_node *chain;
     transaction_node *unconfirmed_transactions;
     uint64_t cur_index;
-    char last_block_hash[65];
+    char last_block_hash[HASH_LENGTH];
     block last_block;
 }
 Blockchain;
@@ -66,7 +66,6 @@ block create_block(Blockchain* bc, transaction_node* transactions)
     {
         block new_block;
         new_block.index = 0;
-        bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
         return new_block;
     }
     
@@ -77,10 +76,9 @@ block create_block(Blockchain* bc, transaction_node* transactions)
     new_block.stake_ind = 0;
 
     // add time and transactions
-    strncpy(new_block.last_hash, bc->last_block_hash, 65);
+    strncpy(new_block.last_hash, bc->last_block_hash, HASH_LENGTH);
     new_block.tr_chain = transactions;
     new_block.timestamp = time(NULL);
-    bootcoin_errno = BOOTCOIN_NOERROR;
     return new_block;
 }
 
@@ -148,9 +146,19 @@ int check_block_validity(block *last_block, block *proposed_block)
     }
 
     // checking for block hash errors
-    char last_hash[65] = { 0 };
-    if (block_hash(last_block, last_hash) < 0)
+    char last_hash[HASH_LENGTH] = { 0 };
+    int errval = 0;
+    if ((errval = block_hash(last_block, last_hash)) < 0)
     {
+        if (errval == -1)
+        {
+            bootcoin_errno = BOOTCOIN_INVALID_PARAM_ERROR;
+        }
+
+        else if (errval == -2)
+        {
+            bootcoin_errno = BOOTCOIN_MEMORY_ERROR;
+        }
         return -2;
     }
 
@@ -250,21 +258,48 @@ block mine_block(Blockchain* bc)
 int main()
 {
     Blockchain battalion_commander = initialize_blockchain();
-    transaction t1;
-    t1.amount = 30;
-    t1.sender = "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub";
-    t1.recipient = "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub";
+    transaction t1 = create_transaction("1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", 30);
+    if (t1.timestamp == 0)
+    {
+        printf("invalid param error\n");
+        return -1;
+    }
 
-    transaction t2;
-    t2.amount = 1;
-    t2.sender = "DQXFFxXbhK8Es9DCJX2NnXRj2sxbfLpKYH";
-    t2.recipient = "DQXFFxXbhK8Es9DCJX2NnXRj2sxbfLpKYH";
+    else if (t1.timestamp == 1)
+    {
+        printf("memoryv error\n");
+        return -2;
+    }
 
-    transaction t3;
-    t3.amount = 50000;
-    t3.sender = "ak_2hrCzNBYhFe4qPDF7inqnKjykJtYZVX1zQGpV4N9nqUzZu6E4t";
-    t3.recipient = "ak_2hrCzNBYhFe4qPDF7inqnKjykJtYZVX1zQGpV4N9nqUzZu6E4t";
+    printf("Transaction created at %llu with a hash value of: %s\n\n", t1.timestamp, t1.hash);
 
+    transaction t2 = create_transaction("DQXFFxXbhK8Es9DCJX2NnXRj2sxbfLpKYH", "DQXFFxXbhK8Es9DCJX2NnXRj2sxbfLpKYH", 1);
+    if (t2.timestamp == 0)
+    {
+        printf("invalid param error\n");
+        return -1;
+    }
+
+    else if (t2.timestamp == 1)
+    {
+        printf("memoryv error\n");
+        return -2;
+    }
+
+    printf("Transaction created at %llu with a hash value of: %s\n\n", t2.timestamp, t2.hash);
+    transaction t3 = create_transaction("ak_2hrCzNBYhFe4qPDF7inqnKjykJtYZVX1zQGpV4N9nqUzZu6E4t", "ak_2hrCzNBYhFe4qPDF7inqnKjykJtYZVX1zQGpV4N9nqUzZu6E4t", 50000);
+    if (t3.timestamp == 0)
+    {
+        printf("invalid param error\n");
+        return -1;
+    }
+
+    else if (t3.timestamp == 1)
+    {
+        printf("memoryv error\n");
+        return -2;
+    }
+    printf("Transaction created at %llu with a hash value of: %s\n\n", t3.timestamp, t3.hash);
     struct transaction_node n1;
     n1.tran = t1;
     n1.next = NULL;
@@ -295,7 +330,7 @@ int main()
             printf("Failed to add block\n");
             return -2;
         }
-        char hash_of_test[65] = { 0 };
+        char hash_of_test[HASH_LENGTH] = { 0 };
         block_hash(&test_block, hash_of_test);
         printf("Successfully added block %s, aka %s at index %llu at %llu\n", hash_of_test, battalion_commander.last_block_hash, test_block.index, test_block.timestamp);
         return 0;

@@ -12,7 +12,7 @@ typedef struct block
 {
     uint64_t index;
     uint64_t stake_ind;
-    char last_hash[65];
+    char last_hash[HASH_LENGTH];
     transaction_node* tr_chain;
     time_t timestamp;
 }
@@ -29,4 +29,4 @@ block_node;
 
 int verify_proof(uint64_t last_proof, uint64_t proof_guess);
 uint64_t proof_of_work(uint64_t last_proof);
-int block_hash(block* cur_block, char result[65]);
+int block_hash(block* cur_block, char result[HASH_LENGTH]);
