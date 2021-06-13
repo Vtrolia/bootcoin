@@ -338,5 +338,8 @@ int main()
 
     printf("Block was not valid\n");
     return -3;
-    
+
+    initialize_private_and_public_keys();
+    RSA* keys = RSA_new();
+    printf("%i\n", load_public_and_private_keys(keys));
 }
