@@ -343,9 +343,8 @@ int main()
     RSA* keys2 = load_public_and_private_keys();
 
     char* signature = malloc(257);
-    int siglen = 256;
-    printf("%i\n", generate_rsa_signature("my cock rages on", 18, signature, &siglen, keys2));
-    printf("%s\n", signature);
-    printf("%i\n", generate_rsa_signature("my cock rages on", 18, signature, &siglen, keys));
-    printf("%s\n", signature);
+    int siglen = 256;;
+    transaction t1 = create_transaction("1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", 30);
+    printf("%i\n%s\n", sign_transaction(keys, keys2, &t1), t1.signature);
+
 }

@@ -127,3 +127,46 @@ char* transaction_string(transaction* tr)
     return result;
 }
 
+
+/**
+* in order for a transaction to be ceritified, it will need to be signed by the sender
+*/
+int sign_transaction(RSA* keypair, RSA* sendkey, transaction* tr)
+{
+    // pissin me off with invalid params now
+    if (!keypair || !sendkey || !tr)
+    {
+        return -1;
+    }
+
+    // compare hashes to ensure no tampering
+    char new_hs[65] = { 0 };
+    char* ts = transaction_string(tr);
+    if (generate_sha3_256_hash(ts, strlen(ts), new_hs) < 0)
+    {
+        free(ts);
+        return -2;
+    }
+    if (strncmp(tr->hash, new_hs, 64) != 0)
+    {
+        free(ts);
+        return -3;
+    }
+
+    // make sure the keys aren't different
+    if (memcmp(keypair, sendkey, sizeof(keypair)) != 0)
+    {
+        return -4;
+    }
+
+    // sign
+    int siglen = 256;
+    if (generate_rsa_signature(ts, strlen(ts), tr->signature, &siglen, sendkey) < 0)
+    {
+        free(ts);
+        return -5;
+    }
+
+    free(ts);
+    return 0;
+}

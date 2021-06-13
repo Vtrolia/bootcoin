@@ -14,9 +14,9 @@ typedef struct block
 {
     uint64_t index;
     uint64_t stake_ind;
+    time_t timestamp;
     char last_hash[HASH_LENGTH];
     transaction_node* tr_chain;
-    time_t timestamp;
 }
 block;
 
