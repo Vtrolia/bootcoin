@@ -257,7 +257,7 @@ block mine_block(Blockchain* bc)
 
 int main()
 {
-    Blockchain battalion_commander = initialize_blockchain();
+    /*Blockchain battalion_commander = initialize_blockchain();
     transaction t1 = create_transaction("1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", 30);
     if (t1.timestamp == 0)
     {
@@ -337,9 +337,15 @@ int main()
     }
 
     printf("Block was not valid\n");
-    return -3;
+    return -3;*/
 
-    initialize_private_and_public_keys();
-    RSA* keys = RSA_new();
-    printf("%i\n", load_public_and_private_keys(keys));
+    RSA* keys = initialize_private_and_public_keys();
+    RSA* keys2 = load_public_and_private_keys();
+
+    char* signature = malloc(257);
+    int siglen = 256;
+    printf("%i\n", generate_rsa_signature("my cock rages on", 18, signature, &siglen, keys2));
+    printf("%s\n", signature);
+    printf("%i\n", generate_rsa_signature("my cock rages on", 18, signature, &siglen, keys));
+    printf("%s\n", signature);
 }

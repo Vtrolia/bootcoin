@@ -28,7 +28,7 @@ typedef struct block_node
 }
 block_node;
 
-
+/* functions */
 int verify_proof(uint64_t last_proof, uint64_t proof_guess);
 uint64_t proof_of_work(uint64_t last_proof);
 int block_hash(block* cur_block, char result[HASH_LENGTH]);

@@ -64,8 +64,8 @@ RSA *initialize_private_and_public_keys()
     BN_free(e);
 
     // create the files for writing
-    BIO *priv = BIO_new_file(PRIVKEY_FILE, "w");
-    BIO* pub = BIO_new_file(PUBKEY_FILE, "w");
+    BIO *priv = BIO_new_file(PRIVKEY_FILE, "wb");
+    BIO* pub = BIO_new_file(PUBKEY_FILE, "wb");
     if (!priv || !pub)
     {
         RSA_free(keypair);
@@ -90,25 +90,24 @@ RSA *initialize_private_and_public_keys()
 /**
 * If the keys have already been previously created, they will be stored in privkey.pem and pubkey.pem, and in order to
 * be used they must be read from there files.
-* @param keypair: an RSA keypair to be filled with the private and public key. 
-* @return: 0 upon success, a negative integer is returned upon failure and keypair is set to NULL
+* @return: keypair filled with a private and public key. Upon failure, keypair is set to NULL
 */
-int load_public_and_private_keys(RSA* keypair)
+RSA *load_public_and_private_keys()
 {
     // fuck outta here
+    RSA* keypair = RSA_new();
     if (!keypair)
     {
-        return -1;
+        return NULL;
     }
 
     // load up the private/public keyfiles
-    BIO *priv = BIO_new_file(PRIVKEY_FILE, "r");
-    BIO* pub = BIO_new_file(PUBKEY_FILE, "r");
+    BIO *priv = BIO_new_file(PRIVKEY_FILE, "rb");
+    BIO* pub = BIO_new_file(PUBKEY_FILE, "rb");
     if (!priv || !pub)
     {
         RSA_free(keypair);
-        keypair = NULL;
-        return -2;
+        return NULL;
     }
    
     // read them into the keypair variable
@@ -117,13 +116,66 @@ int load_public_and_private_keys(RSA* keypair)
         RSA_free(keypair);
         BIO_free(priv);
         BIO_free(pub);
-        keypair = NULL;
-        return -3;
+        return NULL;
     }
 
     // return success upon success
     BIO_free(priv);
     BIO_free(pub);
-    return 0;
+    return keypair;
 }
 
+
+
+/**
+* In order to verify transactions as being legitimate, they will need to be signed by the sender's private key. For this,
+* a string will be input and the signature returned, utilizing sha3_256.
+* @param msg: string to be signed
+* @param msg_len: length of msg
+* @param sig: the string that will hold the signature
+* @param sig_len: length of memory allocated to sig, will be set to length of data in sig upon successful signing
+* @param keypair: the active private and public key
+* @return: 0 upon success, negative integer upon failure.
+*/
+int generate_rsa_signature(char *msg, int msg_len, char *sig, int *sig_len, RSA* keypair)
+{
+    // miss me with that null shit
+    if (!msg || !sig || !keypair)
+    {
+        return -1;
+    }
+    
+    // set the private key
+    EVP_MD_CTX* md_ctx = EVP_MD_CTX_new();
+    EVP_PKEY* priv_k = EVP_PKEY_new();
+    EVP_PKEY_assign_RSA(priv_k, keypair);
+    if (!md_ctx || !priv_k)
+    {
+        return -2;
+    }
+
+    // sign and spit out the digest
+    if (EVP_DigestSignInit(md_ctx, NULL, EVP_sha3_256(), NULL, priv_k) < 1)
+    {
+        EVP_MD_CTX_free(md_ctx);
+        EVP_PKEY_free(priv_k);
+        return -3;
+    }
+    if (EVP_DigestSignUpdate(md_ctx, msg, msg_len) < 1)
+    {
+        EVP_MD_CTX_free(md_ctx);
+        EVP_PKEY_free(priv_k);
+        return -4;
+    }
+    if (EVP_DigestSignFinal(md_ctx, sig, sig_len) < 1)
+    {
+        EVP_MD_CTX_free(md_ctx);
+        EVP_PKEY_free(priv_k);
+        return -7;
+    }
+
+    // free up our, shall we say, nagging considerations?
+    EVP_MD_CTX_free(md_ctx);
+    EVP_PKEY_free(priv_k);
+    return 0;
+}

@@ -28,6 +28,7 @@ typedef struct transaction_node
 }
 transaction_node;
 
+/* functions */
 int add_transaction_to_chain(transaction_node* origin, transaction_node* tr);
 char* transaction_string(transaction* tr);
 transaction create_transaction(char* sender, char* recipient, uint64_t amount);
