@@ -14,4 +14,5 @@ int generate_sha3_256_hash(char* input, size_t input_size, char result[HASH_LENG
 RSA *initialize_private_and_public_keys(void);
 RSA *load_public_and_private_keys();
 int generate_rsa_signature(char* msg, int msg_len, char* sig, int* sig_len, RSA* keypair);
+
 #endif

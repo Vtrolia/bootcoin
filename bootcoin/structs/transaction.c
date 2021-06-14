@@ -24,6 +24,7 @@ transaction create_transaction(char* sender, char* recipient, uint64_t amount)
     new_transaction.amount = amount;
     new_transaction.sender = sender;
     new_transaction.recipient = recipient;
+    memset(new_transaction.signature, 0, 256);
 
     // get the time the transaction was created
     new_transaction.timestamp = time(NULL);
@@ -142,6 +143,10 @@ int sign_transaction(RSA* keypair, RSA* sendkey, transaction* tr)
     // compare hashes to ensure no tampering
     char new_hs[65] = { 0 };
     char* ts = transaction_string(tr);
+    if (!ts)
+    {
+        return -1;
+    }
     if (generate_sha3_256_hash(ts, strlen(ts), new_hs) < 0)
     {
         free(ts);
@@ -169,4 +174,49 @@ int sign_transaction(RSA* keypair, RSA* sendkey, transaction* tr)
 
     free(ts);
     return 0;
+}
+
+
+/**
+* Iot ensure security and reliability of the blockchain, each transaction asking to be added to the chain will have to
+* be verified. Only transactions that actually are legitimate will be added to the chain, to be mined and formed
+* into a block.
+* @param tr: the unverified transaction
+* @return: 1 upon a legitimate transaction being verified, negative int if it is not legit
+*/
+int verify_transaction(transaction* tr)
+{
+    // no transaction is not at all legit
+    if (!tr)
+    {
+        return -1;
+    }
+
+    // make sure the stored hash value and the actual hash value are the same, to ensure data has not been tampered with
+    char new_hs[65] = { 0 };
+    char* ts = transaction_string(tr);
+    if (!ts)
+    {
+        return -2;
+    }
+    if (generate_sha3_256_hash(ts, strlen(ts), new_hs) != 0)
+    {
+        free(ts);
+        return -3;
+    }
+    free(ts);
+
+    // sender and recipient cannot be the same
+    if (strncmp(tr->sender, tr->recipient, strlen(tr->sender)) == 0)
+    {
+        return -4;
+    }
+
+    // needs to be signed by the sender to be legit
+    if (!tr->signature || strlen(tr->signature) < 1)
+    {
+        return -5;
+    }
+
+    return 1;
 }

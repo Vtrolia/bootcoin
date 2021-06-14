@@ -338,13 +338,29 @@ int main()
 
     printf("Block was not valid\n");
     return -3;*/
+    for (int i = 0; i < 10; i++) {
+        RSA* keys = initialize_private_and_public_keys();
+        RSA* keys2 = load_public_and_private_keys();
 
-    RSA* keys = initialize_private_and_public_keys();
-    RSA* keys2 = load_public_and_private_keys();
+        char* signature = malloc(257);
+        if (!signature)
+        {
+            return;
+        }
+        int siglen = 256;
 
-    char* signature = malloc(257);
-    int siglen = 256;;
-    transaction t1 = create_transaction("1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", 30);
-    printf("%i\n%s\n", sign_transaction(keys, keys2, &t1), t1.signature);
+        transaction t2 = create_transaction("DQXFFxXbhK8Es9DCJX2NnXRj2sxbfLpKYH", "DQXFFxXbhKeEs9DCJX2NnXRj2sxbfLpKYH", 1);
+        printf("verifying t2 attempt 1: %i\n", verify_transaction(&t2));
+        printf("signing: %i %s\n", sign_transaction(keys2, keys, &t2), t2.signature);
+        printf("verifying t2 attempt 2: %i\n\n", verify_transaction(&t2));
 
+        memset(signature, 0, 257);
+        siglen = 0;
+        keys = initialize_private_and_public_keys();
+        keys2 = load_public_and_private_keys();
+        transaction t1 = create_transaction("1GUA9UZMifAsoKphEJbzrRCP4qTLpa7y1b", "1GUA9UZMifAsoKphEJbzrRCP4qTLpa7yub", 30);
+        printf("verifying t1 attempt 1: %i\n", verify_transaction(&t1));
+        printf("signing t1: %i %s\n", sign_transaction(keys, keys2, &t1), t1.signature);
+        printf("verifying t1 attempt 2: %i\n\n", verify_transaction(&t1));
+    }
 }
